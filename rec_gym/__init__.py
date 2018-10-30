@@ -1,3 +1,4 @@
+from .envs import env_0_args, env_1_args
 from gym.envs.registration import register
 
 register(
