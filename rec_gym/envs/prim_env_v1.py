@@ -33,6 +33,8 @@ env_1_args = {
     # reward Bernoulli noise var  \sigma^2
     'noise_sigma': 2,
 
+    # users initial sigma
+    'user_init_sigma' : 5,
 
     # TODO: make some kernels in env, and use name as parameter
     'user_drifting_kernel' : lambda x: x,
@@ -76,7 +78,7 @@ class PrimEnv1(gym.Env):
         return self.num_items
 
     def _load_users(self):
-        users = self.rng.randn(self.num_users, self.embedding_dimension)
+        users = self.user_init_sigma * self.rng.randn(self.num_users, self.embedding_dimension)
         return users
 
     def _load_items(self):
