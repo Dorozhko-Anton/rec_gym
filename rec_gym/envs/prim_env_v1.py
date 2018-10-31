@@ -222,4 +222,18 @@ class PrimEnv1(gym.Env):
         return observations, reward, done, info
 
     def reset(self):
-        pass
+
+        self.users = self._load_users()
+        #self.items = self._load_items()
+        self.active_user = self._load_active_user()
+
+        self.time = 0
+        #self.user_drift_kernel = lambda x: x
+
+        # for renderinf purposes
+        self.last_actions = [deque(maxlen=5) for _ in range(self.num_users)]
+        self.last_rewards = [deque(maxlen=5) for _ in range(self.num_users)]
+
+        observations = (self.users, self.items, self.active_user)
+
+        return observations
