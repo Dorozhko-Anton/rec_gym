@@ -1,239 +1,243 @@
+from collections import defaultdict, namedtuple
+import gin
 import gym
 import numpy as np
-from scipy.special import expit as sigmoid
-from collections import deque
-
 from sklearn.datasets import make_blobs
 
-env_1_args = {
-    # TODO: change item set in time
-
-    # number of clusters
-    'K' : 4,
-    # items per cluster # TODO: why we need that ?
-    # 'n_k' : []
-
-    # number of items n
-    'num_items' : 100,
-    # number of recommendations in each action L
-    'num_recommendations' : 1,
-    # number of users m
-    'num_users' : 20,
-    # embedding dimension - d
-    'embedding_dimension' : 2,
-
-    # cluster center var
-    'cluster_var' : 16,
-    # inner cluster var
-    'in_cluster_var' : 0.5,
-
-    # user leave probability  eps
-    'active_user_change_proba' :  0.1,
-
-    # reward Bernoulli noise var  \sigma^2
-    'noise_sigma': 2,
-
-    # users initial sigma
-    'user_init_sigma' : 5,
-
-    # TODO: make some kernels in env, and use name as parameter
-    'user_drifting_kernel' : lambda x: x,
-    'user_drift_autoreg_coef' : 0.1,
-    'user_drift_sigma' : 4,
-    # ['stubborn', 'drifting' , 'receptive]
-    'user_type' : 'drifting', #[0.5, 0.3, 0.2],
-
-    # seed of rng
-    'seed' : 42,
-}
+from sklearn.decomposition import PCA
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 
+class User:
+    def __init__(self,
+                 id: int,
+                 embedding: np.ndarray):
+        self.id = id
+        self.embedding = embedding
+
+
+class Item:
+    def __init__(self,
+                 id: int,
+                 embedding: np.ndarray,
+                 use_until: int):
+        self.id = id
+        self.embedding = embedding
+        self.use_util = use_until
+
+
+Interaction = namedtuple('Interaction', ['t', 'uid', 'recs', 'rewards', 'probs'])
+
+
+@gin.configurable
 class PrimEnv1(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array']}
 
-    def __init__(self):
-        pass
+    def __init__(self,
+                 n_items: int,
+                 n_users: int,
+                 n_rec: int,
+                 embedding_dimension: int,
+                 cluster_var: float,
+                 in_cluster_var: float,
+                 user_change_prob: float,
+                 reward_noise: float,
+                 user_init_sigma: float,
+                 user_ar_coef: float,
+                 user_drift_sigma: float,
+                 seed: int,
+                 user_type: str,
+                 ):
 
-    def init_gym(self, args):
+        self.n_items = n_items
+        self.n_users = n_users
+        self.n_rec = n_rec
+        self.embedding_dimension = embedding_dimension
+        self.cluster_var = cluster_var
+        self.in_cluster_var = in_cluster_var
+        self.user_change_prob = user_change_prob
+        self.reward_noise = reward_noise
+        self.user_init_sigma = user_init_sigma
+        self.user_ar_coef = user_ar_coef
+        self.user_drift_sigma = user_drift_sigma
+        self.random_seed = seed
+        self.user_type = user_type
+        self.rng = np.random.RandomState(seed=self.random_seed)
 
-        # set all key word arguments as attributes
-        for key in args:
-            setattr(self, key, args[key])
-
-        self.rng = np.random.RandomState(seed=self.seed)
-
+        # create items
+        # create users
+        self.user_counter = 0
+        self.item_counter = 0
         self.users = self._load_users()
         self.items = self._load_items()
         self.active_user = self._load_active_user()
 
         self.time = 0
-        self.user_drift_kernel = lambda x: x
 
-        # for renderinf purposes
-        self.last_actions = [deque(maxlen=5) for _ in range(self.num_users)]
-        self.last_rewards = [deque(maxlen=5) for _ in range(self.num_users)]
-
-    @property
-    def _n_actions(self):
-        return self.num_items
+        # recommendations at each step
+        # relevancy as a proba of click for each object in recommendation at each step
+        # reward for each product
+        self.recommendations = defaultdict(list)
+        self.ps = defaultdict(list)
+        self.rewards = defaultdict(list)
+        self.interactions = []
 
     def _load_users(self):
-        users = self.user_init_sigma * self.rng.randn(self.num_users, self.embedding_dimension)
+        users = {}
+        for i in range(self.n_users):
+            user_vec = self.user_init_sigma * self.rng.randn(self.embedding_dimension)
+            u = User(id=self.user_counter, embedding=user_vec)
+            self.user_counter += 1
+            users[u.id] = u
         return users
 
     def _load_items(self):
-        #items = self.rng.randn(self.num_items, self.embedding_dimension)
+        cluster_centers = np.sqrt(self.cluster_var) * self.rng.randn(self.n_rec, self.embedding_dimension)
 
-        cluster_centers = np.sqrt(self.cluster_var)*self.rng.randn(self.K, self.embedding_dimension)
+        item_vecs, clusters = make_blobs(n_samples=self.n_items,
+                                         n_features=self.embedding_dimension,
+                                         centers=cluster_centers,
+                                         cluster_std=np.sqrt(self.in_cluster_var),
+                                         # center_box=(-10.0, 10.0),
+                                         shuffle=True,
+                                         random_state=self.random_seed)
 
-        items, clusters = make_blobs(n_samples=self.num_items,
-                                       n_features=self.embedding_dimension,
-                                       centers=cluster_centers,
-                                       cluster_std=np.sqrt(self.in_cluster_var),
-                                       #center_box=(-10.0, 10.0),
-                                       shuffle=True,
-                                       random_state=self.seed)
-        print(items.shape)
+        items = {}
+        for i in item_vecs:
+            item = Item(id=self.item_counter, embedding=i, use_until=np.inf)
+            self.item_counter += 1
+            items[item.id] = item
         return items
 
     def _load_active_user(self):
         return np.random.choice(range(len(self.users)))
 
+    def _order_proba(self, item):
+        eps = self.reward_noise * self.rng.randn()
+        # return sigmoid(self.users[self.active_user].dot(item) + eps)
+        return np.exp(- (np.linalg.norm(self.users[self.active_user].embedding - item) + eps))
 
-    def render(self, mode='human'):
-        """
-        use T-SNE to plot users, items and actions.
-        :param mode:
-        :return:
-        """
-        if mode == 'rgb_array':
+    def _compute_reward(self, action_pos_ids):
+        action = [self.item_pos2id[pos] for pos in action_pos_ids]
 
-            #from sklearn.manifold import TSNE # each call is different transformation
-            from sklearn.decomposition import PCA
-            from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-            from matplotlib.figure import Figure
-            from matplotlib import collections  as mc
-
-            # build tsne dimention reduction if dims > 2
-            if self.items.shape[1] > 2:
-                if not hasattr(self, 'pca'):
-                    self.pca = PCA(n_components=2)
-                    self.pca.fit(self.items)
-
-                items = self.pca.transform(self.items)
-                users = self.pca.transform(self.users)
-            else:
-                items, users = self.items, self.users
-
-            fig = Figure(figsize=(5, 5))
-            canvas = FigureCanvas(fig)
-            ax = fig.gca()
-
-            ax.scatter(items[:, 0], items[:, 1], c='green', label='items')
-            ax.scatter(users[:, 0], users[:, 1], c='red', label='users')
-
-            # active user
-            x, y  = users[self.active_user]
-            ax.scatter(x, y, marker='*', c='black', s=20, label='active user')
-
-            # active user recommendation history
-            actions = self.last_actions[self.active_user]
-            rewards = self.last_rewards[self.active_user]
-
-            # TODO: if item set will change will have problems
-            lines = [ [(x, y), (self.items[a][0], self.items[a][1])] for a in actions]
-            c = [ 'yellow' if r else 'black' for r in rewards]
-            lc = mc.LineCollection(lines, colors=c, linewidths=2)
-            ax.add_collection(lc)
-
-            ax.legend()
-            ax.axis('off')
-            canvas.draw()  # draw the canvas, cache the renderer
-
-            width, height = [int(x) for x in fig.get_size_inches() * fig.get_dpi()]
-            image = np.fromstring(canvas.tostring_rgb(),
-                                dtype='uint8').reshape(height, width,3)
-
-            return image
-        else:
-            pass
-
-
-    def order_proba(self, item):
-        eps = self.noise_sigma * self.rng.randn()
-        return sigmoid(self.users[self.active_user].dot(item) + eps)
-
-    def step(self, action):
-        """
-
-        :param action:
-        :return:
-        """
-        if not isinstance(action, list):
-            action = [action]
-
-        assert self.active_user is not None, 'active user not set'
-
-        # reward
+        ps = []
         rewards = []
         for a in action:
-            p = self.order_proba(self.items[a])
+            p = self._order_proba(self.items[a].embedding)
+            p = np.clip(p, 0, 1)
+
             r = self.rng.choice(
                 [0, 1],
-                p=[1-p, p]
+                p=[1 - p, p]
             )
             rewards.append(r)
+            ps.append(p)
 
-            # logging for rendering
-            self.last_actions[self.active_user].append(a)
-            self.last_rewards[self.active_user].append(r)
+        self.recommendations[self.active_user].append(action)
+        self.rewards[self.active_user].append(rewards)
+        self.ps[self.active_user].append(ps)
+        self.interactions.append(Interaction(t=self.time, uid=self.active_user, recs=action, rewards=rewards, probs=ps))
 
-        reward = np.sum(rewards)
+        return np.sum(rewards)
 
-
-
+    def _evolve(self):
         # user preferences transition
         if self.user_type == 'drifting':
-            u = self.users[self.active_user]
+            u = self.users[self.active_user].embedding
 
             # AR-1
-            self.users[self.active_user] = (1 - self.user_drift_autoreg_coef) * u + self.user_drift_autoreg_coef * self.rng.randn(*u.shape)*self.user_drift_sigma
+            self.users[self.active_user].embedding = self.user_ar_coef * u + np.sqrt(
+                1 - self.user_ar_coef ** 2) * self.rng.randn(*u.shape) * self.user_drift_sigma
 
             # Random walk
-            #self.users[self.active_user] = u + self.rng.randn(*u.shape) * self.user_drift_sigma
+            # self.users[self.active_user] = u + self.rng.randn(*u.shape) * self.user_drift_sigma
 
-            assert np.all(u == self.users[self.active_user]), 'no drift?'
-
-        if self.user_type == 'receptive':
-            u = self.users[self.active_user]
-            self.users[self.active_user] = self.user_preference_change(u, action, reward)
+            assert np.all(u == self.users[self.active_user].embedding), 'no drift?'
 
         # choose next user for recommendations
-        active_user_probas = np.ones(self.num_users) * self.active_user_change_proba / (self.num_users - 1)
-        active_user_probas[self.active_user] = 1 - self.active_user_change_proba
-        next_active_user = self.rng.choice(range(self.num_users), p=active_user_probas)
+        active_user_probas = np.ones(self.n_users) * self.user_change_prob / (self.n_users - 1)
+        active_user_probas[self.active_user] = 1 - self.user_change_prob
+        next_active_user = self.rng.choice(range(self.n_users), p=active_user_probas)
         self.active_user = next_active_user
 
-        observations = (self.users, self.items, self.active_user)
+    def _get_possible_items(self):
+        pos = 0
+        self.item_pos2id = {}
+        possible_items = []
 
+        for k, item in self.items.items():
+            if self.time < item.use_util:
+                possible_items.append(item.embedding)
+                self.item_pos2id[pos] = item.id
+                pos+=1
+        return possible_items
+
+    def step(self, action):
+        reward = self._compute_reward(action)
+        self._evolve()
+
+        observations = (self.users[self.active_user].embedding, self._get_possible_items())
         done = False
         info = None
         self.time += 1
         return observations, reward, done, info
 
     def reset(self):
-
-        self.users = self._load_users()
-        #self.items = self._load_items()
-        self.active_user = self._load_active_user()
-
-        self.time = 0
-        #self.user_drift_kernel = lambda x: x
-
-        # for renderinf purposes
-        self.last_actions = [deque(maxlen=5) for _ in range(self.num_users)]
-        self.last_rewards = [deque(maxlen=5) for _ in range(self.num_users)]
-
-        observations = (self.users, self.items, self.active_user)
-
+        """do nothing"""
+        observations = (self.users[self.active_user].embedding, self._get_possible_items())
         return observations
+
+    def render(self, mode='human'):
+        """
+        use PCA to plot users, items and actions.
+        :param mode:
+        :return:
+        """
+        if mode == 'rgb_array':
+            users_vec = np.array([u.embedding for uid, u in self.users.items()])
+            items_vec = np.array([i.embedding for iid, i in self.items.items()])
+
+            # build dimensionality reduction if dims > 2
+            if items_vec.shape[1] > 2:
+                if not hasattr(self, 'pca'):
+                    self.pca = PCA(n_components=2)
+                    self.pca.fit(items_vec)
+
+                items = self.pca.transform(items_vec)
+                users = self.pca.transform(users_vec)
+            else:
+                items, users = items_vec, users_vec
+
+            fig = Figure(figsize=(5, 5))
+            canvas = FigureCanvas(fig)
+            ax = fig.gca()
+            ax.scatter(items[:, 0], items[:, 1], c='green', label='items')
+            ax.scatter(users[:, 0], users[:, 1], c='red', label='users')
+            # active user
+            x, y = users[self.active_user]
+            ax.scatter(x, y, marker='*', c='black', s=20, label='active user')
+
+            # active user recommendation history
+            # actions = self.last_actions[self.active_user]
+            # rewards = self.last_rewards[self.active_user]
+            # TODO: if item set will change will have problems
+            # if self.action_is_items:
+            #     lines = [ [(x, y), a ] for a in actions]
+            # else:
+            #     lines = [ [(x, y), (self.items[a][0], self.items[a][1])] for a in actions]
+            #
+            # c = [ 'yellow' if r else 'black' for r in rewards]
+            # lc = mc.LineCollection(lines, colors=c, linewidths=2)
+            # ax.add_collection(lc)
+
+            ax.legend()
+            ax.axis('off')
+            canvas.draw()  # draw the canvas, cache the renderer
+            width, height = [int(x) for x in fig.get_size_inches() * fig.get_dpi()]
+            image = np.fromstring(canvas.tostring_rgb(),
+                                  dtype='uint8').reshape(height, width, 3)
+
+            return image
+        else:
+            pass
