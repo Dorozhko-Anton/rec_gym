@@ -8,7 +8,7 @@ from keras.layers import Dense, concatenate
 import numpy as np
 import os
 
-from agents.utils import ReplayBuffer
+from agents.utils import ReplayBuffer, Agent
 
 
 @gin.configurable
@@ -217,121 +217,9 @@ class CriticNetwork:
                                              self._action_ph, name='action_gradients')[0]
 
 
-# @gin.configurable
-# class DDPGAgent:
-#     def __init__(self,
-#                  action_size: int,
-#                  state_dim: int,
-#                  action_dim: int,
-#                  gamma: float,
-#                  sess: tf.Session,
-#                  optimizer: tf.train.Optimizer = tf.train.AdamOptimizer(
-#                      learning_rate=0.001
-#                  ),
-#                  max_tf_checkpoints_to_keep: int = 3,
-#                  experience_size: int =1000):
-#
-#         self.optimizer = optimizer
-#         self.sess = sess
-#         self.gamma = gamma
-#         self.action_dim = action_dim
-#         self.state_dim = state_dim
-#         self.action_size = action_size
-#
-#         self.actor = ActorNetwork(action_size=action_size, state_dim=state_dim,
-#                                   action_dim=action_dim, sess=sess, optimizer=optimizer)
-#
-#         self.critic = CriticNetwork(action_size=action_size, state_dim=state_dim,
-#                                   action_dim=action_dim, sess=sess, optimizer=optimizer, gamma=gamma)
-#
-#
-#         self._replay = ReplayBuffer(experience_size)
-#         self.eval_mode = False
-#         self.training_steps = 0
-#
-#         self._saver = tf.train.Saver(max_to_keep=max_tf_checkpoints_to_keep)
-#
-#     def _choose_action(self, observation):
-#
-#
-#
-#
-#     def begin_episode(self, observation):
-#         pass
-#
-#     def end_episode(self, unused_reward):
-#         pass
-#
-#     def step(self, reward, observation):
-#         return
-#
-#     def bundle_and_checkpoint(self, checkpoint_dir, iteration_number):
-#         """Returns a self-contained bundle of the agent's state.
-#
-#         This is used for checkpointing. It will return a dictionary containing all
-#         non-TensorFlow objects (to be saved into a file by the caller), and it saves
-#         all TensorFlow objects into a checkpoint file.
-#
-#         Args:
-#           checkpoint_dir: str, directory where TensorFlow objects will be saved.
-#           iteration_number: int, iteration number to use for naming the checkpoint
-#             file.
-#
-#         Returns:
-#           A dict containing additional Python objects to be checkpointed by the
-#             experiment. If the checkpoint directory does not exist, returns None.
-#         """
-#         if not tf.gfile.Exists(checkpoint_dir):
-#             return None
-#         # Call the Tensorflow saver to checkpoint the graph.
-#         self._saver.save(
-#             self._sess,
-#             os.path.join(checkpoint_dir, 'tf_ckpt'),
-#             global_step=iteration_number)
-#         # Checkpoint the out-of-graph replay buffer.
-#         self._replay.save(checkpoint_dir, iteration_number)
-#         bundle_dictionary = {}
-#         bundle_dictionary['state'] = self.state
-#         bundle_dictionary['eval_mode'] = self.eval_mode
-#         bundle_dictionary['training_steps'] = self.training_steps
-#         return bundle_dictionary
-#
-#     def unbundle(self, checkpoint_dir, iteration_number, bundle_dictionary):
-#         """Restores the agent from a checkpoint.
-#
-#         Restores the agent's Python objects to those specified in bundle_dictionary,
-#         and restores the TensorFlow objects to those specified in the
-#         checkpoint_dir. If the checkpoint_dir does not exist, will not reset the
-#           agent's state.
-#
-#         Args:
-#           checkpoint_dir: str, path to the checkpoint saved by tf.Save.
-#           iteration_number: int, checkpoint version, used when restoring replay
-#             buffer.
-#           bundle_dictionary: dict, containing additional Python objects owned by
-#             the agent.
-#
-#         Returns:
-#           bool, True if unbundling was successful.
-#         """
-#         try:
-#             # self._replay.load() will throw a NotFoundError if it does not find all
-#             # the necessary files, in which case we abort the process & return False.
-#             self._replay.load(checkpoint_dir, iteration_number)
-#         except tf.errors.NotFoundError:
-#             return False
-#         for key in self.__dict__:
-#             if key in bundle_dictionary:
-#                 self.__dict__[key] = bundle_dictionary[key]
-#         # Restore the agent's TensorFlow graph.
-#         self._saver.restore(self._sess,
-#                             os.path.join(checkpoint_dir,
-#                                          'tf_ckpt-{}'.format(iteration_number)))
-#         return True
-
 
 @gin.configurable
-class DDPGAgent:
+class DDPGAgent(Agent):
     def __init__(self,
                  action_size: int,
                  state_dim: int,
@@ -342,7 +230,8 @@ class DDPGAgent:
                      learning_rate=0.001
                  ),
                  max_tf_checkpoints_to_keep: int = 3,
-                 experience_size: int = 1000):
+                 experience_size: int = 1000,
+                 batch_size: int = 64):
         self.optimizer = optimizer
         self.sess = sess
         self.gamma = gamma
@@ -358,35 +247,42 @@ class DDPGAgent:
 
         self.eval_mode = False
         self.training_steps = 0
+        self.epsilon = 1
+        self.batch_size = batch_size
 
         self._saver = tf.train.Saver(max_to_keep=max_tf_checkpoints_to_keep)
+        self._replay = ReplayBuffer(experience_size)
 
-        self.epsilon = 1
+        self._last_state = None
+        self._last_items = None
+        self._last_action = None
 
-    def train(self, batch):
+        self.td_losses = []
 
-        state, action, r, next_s, items, done = batch
+    def begin_episode(self, observation):
+        state, items = observation
+        self._last_state = state
+        self._last_items = items
+        actions_ids, action = self._sample_action(state, items)
+        self._last_action = action
+        return actions_ids
 
-        action = [np.reshape(a, newshape=-1) for a in action]
+    def step(self, reward, observation):
+        state, items = observation
 
-        # choose actions for next_s
-        a_next = []
-        for i in range(len(state)):
-            ids, next_action = self.actor.predict_action(state=state[i], items=items[i])
-            a_next.append(np.reshape(next_action, newshape=-1))
+        self._replay.add(self._last_state, self._last_action, reward, state, items, False)
 
-        td_loss, action_gradients = self.critic.train([state, action, r, next_s, a_next])
-        self.actor.train(state=state, action_gradients=action_gradients)
+        if not self.eval_mode:
+            self._train_step()
 
-        return td_loss
+        self._last_state = state
+        self._last_items = items
+        actions_ids, action = self._sample_action(state, items)
+        self._last_action = action
+        return actions_ids
 
-    def sample_action(self, observation, items):
-        actions_ids, action = self.actor.predict_action(observation, items)
-        return actions_ids, action
-
-    def update_target_weights(self):
-        self.actor.sync_target()
-        self.critic.sync_target()
+    def end_episode(self, reward):
+        return super().end_episode(reward)
 
     def bundle_and_checkpoint(self, checkpoint_dir, iteration_number):
         """Returns a self-contained bundle of the agent's state.
@@ -452,6 +348,34 @@ class DDPGAgent:
                             os.path.join(checkpoint_dir,
                                          'tf_ckpt-{}'.format(iteration_number)))
         return True
+
+    def _train_step(self):
+        if len(self._replay) >= self.batch_size:
+            self.training_steps += 1
+
+            batch = self._replay.sample(self.batch_size)
+            td_loss = self._train(batch)
+            self.td_losses.append(td_loss)
+
+    def _train(self, batch):
+        state, action, r, next_s, items, done = batch
+        action = [np.reshape(a, newshape=-1) for a in action]
+        # choose actions for next_s
+        a_next = []
+        for i in range(len(state)):
+            ids, next_action = self.actor.predict_action(state=state[i], items=items[i])
+            a_next.append(np.reshape(next_action, newshape=-1))
+        td_loss, action_gradients = self.critic.train([state, action, r, next_s, a_next])
+        self.actor.train(state=state, action_gradients=action_gradients)
+        return td_loss
+
+    def _sample_action(self, observation, items):
+        actions_ids, action = self.actor.predict_action(observation, items)
+        return actions_ids, action
+
+    def _update_target_weights(self):
+        self.actor.sync_target()
+        self.critic.sync_target()
 
 
 if __name__ == '__main__':

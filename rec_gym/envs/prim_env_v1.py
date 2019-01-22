@@ -24,7 +24,7 @@ class Item:
                  use_until: int):
         self.id = id
         self.embedding = embedding
-        self.use_util = use_until
+        self.use_until = use_until
 
 
 Interaction = namedtuple('Interaction', ['t', 'uid', 'recs', 'rewards', 'probs'])
@@ -167,7 +167,7 @@ class PrimEnv1(gym.Env):
         possible_items = []
 
         for k, item in self.items.items():
-            if self.time < item.use_util:
+            if self.time < item.use_until:
                 possible_items.append(item.embedding)
                 self.item_pos2id[pos] = item.id
                 pos+=1
