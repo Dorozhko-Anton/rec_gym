@@ -29,7 +29,7 @@ class ActorNetwork:
         self.action_size = action_size
 
         self._actor_gradients_ph = tf.placeholder(tf.float32,
-                                                  shape=[None, self.state_dim * self.action_size],
+                                                  shape=[None, self.action_dim * self.action_size],
                                                   name='action_gradients')
         self._state_ph = tf.placeholder(tf.float32,
                                         shape=[None, self.state_dim],
@@ -59,9 +59,12 @@ class ActorNetwork:
         actions_ids = []
         for i in range(self.action_size):
             for chosen in actions_ids:
-                scores[i][chosen] = -1
+                scores[i][chosen] = 0
 
-            actions_ids.append(np.argmax(scores[i]))
+            # actions_ids.append(np.argmax(scores[i]))
+            def normalize(x):
+                return (x-np.min(x))/np.sum((x-np.min(x)))
+            actions_ids.append(np.random.choice(range(len(scores[i])), p=normalize(scores[i]) ))
 
         return actions_ids, np.array(items)[actions_ids]
 
@@ -231,7 +234,8 @@ class DDPGAgent(Agent):
                  ),
                  max_tf_checkpoints_to_keep: int = 3,
                  experience_size: int = 1000,
-                 batch_size: int = 64):
+                 batch_size: int = 64
+                ):
         self.optimizer = optimizer
         self.sess = sess
         self.gamma = gamma
@@ -362,7 +366,12 @@ class DDPGAgent(Agent):
         action = [np.reshape(a, newshape=-1) for a in action]
         # choose actions for next_s
         a_next = []
+        #print("_train")
+        #print(state.shape)
+        #print(state[0])
+        #print("="*20)
         for i in range(len(state)):
+            #print(state[i])
             ids, next_action = self.actor.predict_action(state=state[i], items=items[i])
             a_next.append(np.reshape(next_action, newshape=-1))
         td_loss, action_gradients = self.critic.train([state, action, r, next_s, a_next])
@@ -370,6 +379,10 @@ class DDPGAgent(Agent):
         return td_loss
 
     def _sample_action(self, observation, items):
+        if len(self._replay) < 2*self.batch_size:
+            actions_ids = np.random.choice(range(len(items)), size=self.action_size)
+            return actions_ids, [items[i] for i in actions_ids]
+
         actions_ids, action = self.actor.predict_action(observation, items)
         return actions_ids, action
 

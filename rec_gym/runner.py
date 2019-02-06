@@ -59,6 +59,7 @@
 
 from tqdm import tqdm
 
+
 def run_experiment(env, agent, t_train=10000, t_test=2000):
     observation = env.reset()
     action = agent.begin_episode(observation)

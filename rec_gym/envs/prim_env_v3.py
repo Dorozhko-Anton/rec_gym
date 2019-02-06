@@ -8,6 +8,7 @@ from sklearn.decomposition import PCA
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+import scipy.stats
 
 class User:
     def __init__(self,
@@ -30,8 +31,8 @@ class Item:
 Interaction = namedtuple('Interaction', ['t', 'uid', 'recs', 'rewards', 'probs'])
 
 
-@gin.configurable('PrimEnv2')
-class PrimEnv2(gym.Env):
+@gin.configurable('PrimEnv3')
+class PrimEnv3(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array']}
 
     def __init__(self,
@@ -51,6 +52,8 @@ class PrimEnv2(gym.Env):
                  new_items_interval: int,
                  new_items_size: float,
                  return_items_objects: bool,
+                 user_graph_connectivity: float,
+                 broadcast_std: float,
                  ):
 
         self.n_items = n_items
@@ -73,6 +76,8 @@ class PrimEnv2(gym.Env):
         self.new_items_interval = new_items_interval
         self.new_items_size = new_items_size
 
+        self.user_graph_connectivity = user_graph_connectivity
+
         # create items
         # create users
         self.user_counter = 0
@@ -92,8 +97,13 @@ class PrimEnv2(gym.Env):
         self.rewards = defaultdict(list)
         self.interactions = []
 
+        self.user_graph = defaultdict(set)
         self.bought_items = defaultdict(set)
-        self.user_representations = defaultdict(list)
+
+        # keep 10 mean and stds around an item that user bought
+        # if that user is a neighbour
+        self.neighbourhood_influence = defaultdict(list)
+        self.broadcast_std = broadcast_std
 
     def _load_users(self):
         users = {}
@@ -102,6 +112,18 @@ class PrimEnv2(gym.Env):
             u = User(id=self.user_counter, embedding=user_vec)
             self.user_counter += 1
             users[u.id] = u
+
+        for i in range(self.n_users):
+            neighbours = set(range(self.n_users))
+            neighbours.remove(i)
+            neighbours = list(neighbours)
+
+            n_neighbours = int(self.user_graph_connectivity * len(neighbours))
+
+            for j in np.random.choice(neighbours, size=n_neighbours):
+                self.user_graph[i].append(j)
+
+
         return users
 
     def _load_items(self):
@@ -134,6 +156,12 @@ class PrimEnv2(gym.Env):
         self.user_counter += 1
         self.users[u.id] = u
 
+        neighbours = set(range(self.n_users)) - u.id
+        n_neighbours = self.user_graph_connectivity * len(neighbours)
+        for j in np.random.choice(neighbours, size=n_neighbours):
+            self.user_graph[u.id].append(j)
+
+
     def _load_active_user(self):
         return np.random.choice(range(len(self.users)))
 
@@ -148,11 +176,14 @@ class PrimEnv2(gym.Env):
         ps = []
         rewards = []
         for a in action:
-            # TODO: you can click only 1  on site
             p = self._order_proba(self.items[a].embedding)
+
+            # TODO: add influence proba
+            influence_proba = np.mean([dist.pdf(self.item[a].embedding)
+                                       for dist in self.neighbourhood_influence[self.active_user]])
+            alpha = 0.7
+            p = alpha*p + (1-alpha)*influence_proba
             p = np.clip(p, 0, 1)
-            # TODO : clip with baseline
-            # p = np.clip(p, 0.1, 1)
 
             r = self.rng_rewards.choice(
                 [0, 1],
@@ -161,7 +192,14 @@ class PrimEnv2(gym.Env):
 
             if r > 0:
                 self.bought_items[self.active_user].add(self.items[a].id)
-                self.user_representations[self.active_user].append(a)
+
+                # TODO: broadcast the influence in the network
+                for x in self.user_graph[self.active_user]:
+                    mean = self.items[a].embedding
+                    cov  = np.eye(len(mean)) * self.broadcast_std
+                    dist = scipy.stats.multivariate_normal(mean=mean, cov=cov)
+                    self.neighbourhood_influence[x].append(dist)
+
 
             rewards.append(r)
             ps.append(p)
@@ -220,26 +258,11 @@ class PrimEnv2(gym.Env):
                 pos += 1
         return possible_items
 
-    def _get_observation(self):
-
-        # user_representation = self.users[self.active_user].embedding
-
-        last_bought_items = self.user_representations[self.active_user][-10:]
-        user_representation = []
-        for i in range(10-len(last_bought_items)):
-            user_representation.extend(np.zeros(self.embedding_dimension))
-
-        for i in last_bought_items:
-            user_representation.extend(self.items[i].embedding)
-
-        #print(len(user_representation))
-        return (np.array(user_representation), self._get_possible_items())
-
     def step(self, action):
         reward = self._compute_reward(action)
         self._evolve()
 
-        observations = self._get_observation()
+        observations = (self.users[self.active_user].embedding, self._get_possible_items())
         done = False
         info = None
         self.time += 1
@@ -247,8 +270,8 @@ class PrimEnv2(gym.Env):
 
     def reset(self):
         """do nothing"""
-        #observations = (self.users[self.active_user].embedding, self._get_possible_items())
-        return self._get_observation()
+        observations = (self.users[self.active_user].embedding, self._get_possible_items())
+        return observations
 
     def render(self, mode='human'):
         """

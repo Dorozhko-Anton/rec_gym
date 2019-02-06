@@ -328,26 +328,52 @@ class Agent:
     def unbundle(self, directory, iteration, dictionary):
         raise NotImplemented
 
-# some metrics to consider
-# http://bickson.blogspot.com/2012/10/the-10-recommender-system-metrics-you.html
-# def precision_at_k(predict, target, k=5):
-#     pass
-#
-#
-# def ndcg_at_k(predict, target, k=5):
-#     pass
-#
-#
-# def diversity():
-#     pass
-#
-#
-# def novelty():
-#     pass
-#
-#
-# def recall():
-#     pass
+
+def mrr(x):
+    """
+    mean reciprocal rank
+    """
+    x = np.asarray(x).nonzero()[0]
+    return 1./(x[0] + 1) if len(x) > 0 else 0
+
+
+def precision(x):
+    """
+    precision of binary relevance
+    """
+    return np.mean(x)
+
+
+def precision_at_k(x, k):
+    assert k >= 1
+    assert len(x) >= k
+    x = np.asarray(x)[:k] != 0
+    return np.mean(x)
+
+
+def average_precision(x):
+    """
+    precision for each possible K
+    """
+    x = np.asarray(x) != 0
+    res = [precision_at_k(x, k+1) for k in range(len(x))]
+    return
+
+
+def dcg_at_k(x, k):
+    x = np.asfarray(x)[:k]
+    if x.size:
+        return np.sum(x / np.log2(np.arange(2, x.size + 2)))
+    return 0
+
+
+def ndcg_at_k(x, k):
+    dcg_max = dcg_at_k(sorted(x, reverse=True), k)
+    if not dcg_max:
+        return 0.
+    return dcg_at_k(x, k) / dcg_max
+
+
 import matplotlib.pylab as plt
 import ipywidgets as widgets
 from collections import defaultdict
@@ -381,16 +407,36 @@ def data_exploring_widget(env):
         rewards_by_uid = defaultdict(list)
         all_rewards = []
 
+        count_of_recs_for_uid = defaultdict(int)
+
         for interaction in data[:t]:
             for iid in interaction.recs:
                 counts_by_iid[iid] += 1
                 user_item_counts[interaction.uid][iid] += 1
 
+            count_of_recs_for_uid[interaction.uid] += 1
+
             rewards_by_uid[interaction.uid].extend(interaction.rewards)
             all_rewards.extend(interaction.rewards)
 
-        for uid in range(n_users):
-            plt.plot(pd.Series(rewards_by_uid[uid]).rolling(window=20).mean(), label='user %s' % uid)
+        print('Mean reward:', np.mean(all_rewards))
+
+        c = defaultdict(int)
+        for i in env.interactions:
+            c[i.uid] += 1
+
+        cb = defaultdict(int)
+        for k, v in env.bought_items.items():
+            cb[k] = len(v)
+
+
+        plt.bar(c.keys(), c.values(), label='recommended')
+        plt.bar(cb.keys(), cb.values(), label='bought')
+        #plt.legend()
+        plt.show()
+        # many users make legend too big
+        #for uid in range(n_users):
+        #    plt.plot(pd.Series(rewards_by_uid[uid]).rolling(window=20).mean(), label='user %s' % uid)
 
         plt.plot(pd.Series(all_rewards).rolling(window=20).mean(), label='Mean average precision @20')
         plt.legend()
