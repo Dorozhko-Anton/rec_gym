@@ -102,7 +102,7 @@ class Qagent(Agent):
             repeat_current_state = tf.tile(repeat_current_state, multiples=[1, self._action_size, 1])
             current_qvalue = self.agent(tf.concat([repeat_current_state, self.a_ph], axis=-1))
 
-            current_qvalue = tf.squeeze(current_qvalue)
+            current_qvalue = tf.squeeze(current_qvalue, 0)
             current_qvalue = tf.reduce_sum(current_qvalue, axis=-1)
 
             repeat_states = tf.expand_dims(self.next_s_ph, 1)
@@ -174,15 +174,20 @@ class Qagent(Agent):
     def _train(self, batch):
         s, a, r, next_s, actions, done = batch
 
-        _, loss, self.summary = self._sess.run([self.train_op, self.td_loss, self.merged], {
-            self.s_ph: s,
-            self.a_ph: a,
-            self.r_ph: r,
-            self.done_ph: done,
-            self.next_s_ph: next_s,
-            self.next_as_ph: actions
-        })
-        return loss
+        losses = []
+        for s, a, r, next_s, actions, done in zip(*batch):
+
+            _, loss, _ = self._sess.run([self.train_op, self.td_loss, self.merged], {
+                self.s_ph: s[None],
+                self.a_ph: a[None],
+                self.r_ph: r[None],
+                self.done_ph: done[None],
+                self.next_s_ph: next_s[None],
+                self.next_as_ph: actions[None]
+            })
+            losses.append(loss)
+
+        return np.mean(losses)
 
     def update_target_weights(self):
         self._sess.run(self.target_update_op)

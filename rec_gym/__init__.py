@@ -21,3 +21,8 @@ register(
     id='prim-gym-v3',
     entry_point='rec_gym.envs:PrimEnv3'
 )
+
+register(
+    id='prim-gym-v2-ref-v1',
+    entry_point='rec_gym.envs:PrimEnv2Ref'
+)

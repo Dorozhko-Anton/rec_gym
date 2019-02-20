@@ -294,7 +294,7 @@ class PER(object):
 
             b_idx[i] = index
 
-            experience = [data]
+            experience = data
 
             memory_b.append(experience)
 
@@ -432,11 +432,9 @@ def data_exploring_widget(env):
 
         plt.bar(c.keys(), c.values(), label='recommended')
         plt.bar(cb.keys(), cb.values(), label='bought')
-        #plt.legend()
+        plt.legend()
         plt.show()
-        # many users make legend too big
-        #for uid in range(n_users):
-        #    plt.plot(pd.Series(rewards_by_uid[uid]).rolling(window=20).mean(), label='user %s' % uid)
+
 
         plt.plot(pd.Series(all_rewards).rolling(window=20).mean(), label='Mean average precision @20')
         plt.legend()
@@ -447,12 +445,36 @@ def data_exploring_widget(env):
         plt.title('count of recommended items')
         plt.show()
 
-        plt.figure(figsize=(30,6))
-        sns.heatmap(data=user_item_counts)
-        plt.xlabel('item')
-        plt.ylabel('user')
-        plt.title('user-item count heatmap')
-        plt.show()
+        if n_users * n_items < 1000:
+            plt.figure(figsize=(30,6))
+            sns.heatmap(data=user_item_counts)
+            plt.xlabel('item')
+            plt.ylabel('user')
+            plt.title('user-item count heatmap')
+            plt.show()
+        else:
+            #print('Heatmap for %d is too big' % n_users*n_items)
+            pass
+
+        if hasattr(data[0], 'ranks'):
+
+            ranks = []
+            for i in data[:t]:
+                ranks.append(i.ranks)
+            ranks = np.array(ranks)
+
+            print('Mean ranks for each position')
+            print(np.mean(ranks, axis=0))
+
+            plt.figure(figsize=(10, 5))
+            for i in range(4):
+                plt.plot(pd.Series(ranks[:, i]).rolling(window=30).mean(), label='%d' % (i + 1))
+            plt.title('Moving average of ranks for each position')
+            plt.legend()
+            plt.show();
+
+        else:
+            print('No (ranks) info')
 
 
     interactive_plot = widgets.interactive(plot_counts, t=time_slider)

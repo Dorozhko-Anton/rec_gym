@@ -55,18 +55,19 @@ class ActorNetwork:
 
         scores = self.sess.run(self.scores_op, feed_dict={self._state_ph: [state],
                                                           self._items_ph: items})
+        proto_action = self.sess.run(self._actor, feed_dict={self._state_ph: [state]})
 
         actions_ids = []
         for i in range(self.action_size):
             for chosen in actions_ids:
-                scores[i][chosen] = 0 #np.inf
+                scores[i][chosen] = -1
 
-            #actions_ids.append(np.argmax(scores[i]))
-            def normalize(x):
-                return (x-np.min(x))/np.sum((x-np.min(x)))
-            actions_ids.append(np.random.choice(range(len(scores[i])), p=normalize(scores[i]) ))
+            actions_ids.append(np.argmax(scores[i]))
+            #def normalize(x):
+            #    return (x-np.min(x))/np.sum((x-np.min(x)))
+            #actions_ids.append(np.random.choice(range(len(scores[i])), p=normalize(scores[i]) ))
 
-        return actions_ids, np.array(items)[actions_ids]
+        return actions_ids, np.array(items)[actions_ids], proto_action
 
     def train(self, state, action_gradients):
         self.sess.run(self._train_op, feed_dict={
@@ -93,8 +94,8 @@ class ActorNetwork:
         Returns:
         """
         with tf.variable_scope(name_or_scope=scope):
-            net = Dense(50, activation='relu')(self._state_ph)
-            net = Dense(30, activation='relu')(net)
+            net = Dense(200, activation='relu')(self._state_ph)
+            net = Dense(100, activation='relu')(net)
             net = Dense(self.action_size * self.action_dim)(net)
 
         return net
@@ -171,7 +172,7 @@ class CriticNetwork:
     def train(self, batch):
         s, a, r, s_next, a_next = batch
 
-        reference_values = r.reshape(-1, 1) + self.gamma*self.predict_target_qvalue(s_next, a_next)
+        reference_values = self.predict_target_qvalue(s_next, a_next)
 
         _, td_loss, action_gradients, errors = self.sess.run([self.train_op,
                                                       self.td_loss,
@@ -215,17 +216,17 @@ class CriticNetwork:
         return sync_qt_ops
 
     def _build_train_op(self):
-        self.td_errors = (self._critic - self._reference_ph) ** 2
+        self.td_errors = (self._critic - self.gamma * self._reference_ph) ** 2
         self.td_loss = tf.reduce_mean(self.td_errors)
         # Optimization Op
         self.train_op = self.optimizer.minimize(self.td_loss)
-        self.action_gradients = tf.gradients(self._critic,
+        self.action_gradients = tf.gradients(self.td_loss,
                                              self._action_ph, name='action_gradients')[0]
 
 
 
 @gin.configurable
-class DDPGAgent(Agent):
+class DDPGAgent2(Agent):
     def __init__(self,
                  action_size: int,
                  state_dim: int,
@@ -280,8 +281,8 @@ class DDPGAgent(Agent):
         state, items = observation
         self._last_state = state
         self._last_items = items
-        actions_ids, action = self._sample_action(state, items)
-        self._last_action = action
+        actions_ids, action, proto_action = self._sample_action(state, items)
+        self._last_action = proto_action
         return actions_ids
 
     def step(self, reward, observation):
@@ -298,8 +299,8 @@ class DDPGAgent(Agent):
 
         self._last_state = state
         self._last_items = items
-        actions_ids, action = self._sample_action(state, items)
-        self._last_action = action
+        actions_ids, action, proto_action = self._sample_action(state, items)
+        self._last_action = proto_action
 
         self.qvalues.append(self.critic.predict_qvalue([self._last_state],
                                                        [np.array(self._last_action).reshape(-1)]))
@@ -377,9 +378,9 @@ class DDPGAgent(Agent):
     def _train_step(self):
         if len(self._replay) >= self.batch_size:
             self.training_steps += 1
-            #for i in range(10):
-            td_loss = self._train()
-            self.td_losses.append(td_loss)
+            for i in range(10):
+                td_loss = self._train()
+                self.td_losses.append(td_loss)
 
     def _train(self):
 
@@ -400,8 +401,8 @@ class DDPGAgent(Agent):
 
         for i in range(len(state)):
 
-            ids, next_action = self.actor.predict_action(state=state[i], items=items[i])
-            a_next.append(np.reshape(next_action, newshape=-1))
+            ids, next_action, proto_action = self.actor.predict_action(state=state[i], items=items[i])
+            a_next.append(np.reshape(proto_action, newshape=-1))
         td_loss, action_gradients, errors = self.critic.train([state, action, r, next_s, a_next])
 
         if self.per:
@@ -417,8 +418,8 @@ class DDPGAgent(Agent):
             actions_ids = np.random.choice(range(len(items)), size=self.action_size)
             return actions_ids, [items[i] for i in actions_ids]
 
-        actions_ids, action = self.actor.predict_action(observation, items)
-        return actions_ids, action
+        actions_ids, action, proto_action = self.actor.predict_action(observation, items)
+        return actions_ids, action, proto_action
 
     def _update_target_weights(self):
         self.actor.sync_target()

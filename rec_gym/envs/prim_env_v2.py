@@ -27,7 +27,7 @@ class Item:
         self.use_until = use_until
 
 
-Interaction = namedtuple('Interaction', ['t', 'uid', 'recs', 'rewards', 'probs'])
+Interaction = namedtuple('Interaction', ['t', 'uid', 'recs', 'rewards', 'probs', 'best_ps', 'ranks'])
 
 
 @gin.configurable('PrimEnv2')
@@ -140,7 +140,7 @@ class PrimEnv2(gym.Env):
     def _order_proba(self, item):
         eps = self.reward_noise * self.rng.randn()
         # return sigmoid(self.users[self.active_user].dot(item) + eps)
-        return np.exp(- (np.linalg.norm(self.users[self.active_user].embedding - item) + eps))
+        return np.exp(- (np.linalg.norm(self.users[self.active_user].embedding - item)/2 + eps*0))
 
     def _compute_reward(self, action_pos_ids):
         action = [self.item_pos2id[pos] for pos in action_pos_ids]
@@ -159,6 +159,7 @@ class PrimEnv2(gym.Env):
                 p=[1 - p, p]
             )
 
+
             if r > 0:
                 self.bought_items[self.active_user].add(self.items[a].id)
                 self.user_representations[self.active_user].append(a)
@@ -166,10 +167,30 @@ class PrimEnv2(gym.Env):
             rewards.append(r)
             ps.append(p)
 
+        # TODO: get all items p_click and save ranks of action items
+        all_ps = { self.items[i].id: self._order_proba(self.items[i].embedding)
+                   for i in self.item_pos2id.values() }
+
+        sorted_ps = sorted(all_ps.items(), key=lambda kv : kv[1])
+
+        best_probas = [x[1] for x in sorted_ps[::-1][:len(action)]]
+        ranks = []
+        for a in action:
+            for r, i in enumerate(sorted_ps[::-1]):
+                if i[0] == a:
+                    ranks.append(r+1)
+                    break
+
         self.recommendations[self.active_user].append(action)
         self.rewards[self.active_user].append(rewards)
         self.ps[self.active_user].append(ps)
-        self.interactions.append(Interaction(t=self.time, uid=self.active_user, recs=action, rewards=rewards, probs=ps))
+        self.interactions.append(Interaction(t=self.time,
+                                             uid=self.active_user,
+                                             recs=action,
+                                             rewards=rewards,
+                                             probs=ps,
+                                             best_ps=best_probas,
+                                             ranks=ranks))
 
         return np.sum(rewards)
 
@@ -188,10 +209,11 @@ class PrimEnv2(gym.Env):
             assert np.all(u == self.users[self.active_user].embedding), 'no drift?'
 
         # choose next user for recommendations
-        active_user_probas = np.ones(self.n_users) * self.user_change_prob / (self.n_users - 1)
-        active_user_probas[self.active_user] = 1 - self.user_change_prob
-        next_active_user = self.rng.choice(range(self.n_users), p=active_user_probas)
-        self.active_user = next_active_user
+        if self.n_users > 1:
+            active_user_probas = np.ones(self.n_users) * self.user_change_prob / (self.n_users - 1)
+            active_user_probas[self.active_user] = 1 - self.user_change_prob
+            next_active_user = self.rng.choice(range(self.n_users), p=active_user_probas)
+            self.active_user = next_active_user
 
         # add new items
         if self.time % self.new_items_interval == 0:
@@ -240,6 +262,9 @@ class PrimEnv2(gym.Env):
         self._evolve()
 
         observations = self._get_observation()
+
+        self.possible_items = observations[1]
+
         done = False
         info = None
         self.time += 1
