@@ -11,7 +11,7 @@ import os
 from agents.utils import ReplayBuffer, Agent, PER
 
 
-@gin.configurable
+#@gin.configurable
 class ActorNetwork:
     def __init__(self,
                  action_size: int,
@@ -50,6 +50,38 @@ class ActorNetwork:
 
         self._sync_op = self._build_actor_sync_op()
         self._train_op = self._build_train_op()
+
+        # todo : delete
+        self.info = None
+
+    # def predict_action(self, state, items):
+    #
+    #     scores = self.sess.run(self.scores_op, feed_dict={self._state_ph: [state],
+    #                                                       self._items_ph: items})
+    #     if self.info:
+    #         def softmax(x):
+    #             """Compute softmax values for each sets of scores in x."""
+    #             e_x = np.exp(x - np.max(x))
+    #             return e_x / e_x.sum()
+    #
+    #         prices = self.info['price']
+    #         coef = softmax(prices)
+    #
+    #         #scores = coef * scores
+    #         print(prices.shape)
+    #         print(scores.shape)
+    #
+    #     actions_ids = []
+    #     for i in range(self.action_size):
+    #         for chosen in actions_ids:
+    #             scores[i][chosen] = -1  # np.inf
+    #
+    #         actions_ids.append(np.argmax(scores[i]))
+    #         # def normalize(x):
+    #         #    return (x-np.min(x))/np.sum((x-np.min(x)))
+    #         # actions_ids.append(np.random.choice(range(len(scores[i])), p=normalize(scores[i]) ))
+    #
+    #     return actions_ids, np.array(items)[actions_ids]
 
     def predict_action(self, state, items):
 
@@ -116,7 +148,7 @@ class ActorNetwork:
         return sync_qt_ops
 
 
-@gin.configurable
+#@gin.configurable
 class CriticNetwork:
     def __init__(self,
                  action_size: int,

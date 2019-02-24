@@ -137,8 +137,12 @@ class MovieLens(gym.Env):
         """
         users_to_play = []
         for i in range(self.n_users):
-            if len(self.bought_items[i]) < (self.n_items - self.n_rec):
+            if len(self.bought_items[i]) < (self.n_items - self.n_rec + 1):
                 users_to_play.append(i)
+
+        if len(users_to_play) == 0:
+            for i in range(self.n_users):
+                print(len(self.bought_items[i]))
         self.active_uid = self.np_random.choice(users_to_play)
 
     def step(self, action):
