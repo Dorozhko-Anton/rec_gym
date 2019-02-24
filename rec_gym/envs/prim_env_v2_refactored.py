@@ -1,15 +1,12 @@
 from collections import defaultdict, namedtuple
+
 import gin
 import gym
 import numpy as np
-
-
 from gym.utils import seeding
-
-
-from sklearn.decomposition import PCA
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
+from sklearn.decomposition import PCA
 
 
 class User:
@@ -81,7 +78,7 @@ class PrimEnv2Ref(gym.Env):
         self.user_drift_sigma = user_drift_sigma
         self.new_items_interval = new_items_interval
         self.new_items_size = new_items_size
-        self.user_type = 'drifting' # TODO: make param
+        self.user_type = 'drifting'  # TODO: make param
 
         # obs type
         self.return_items_objects = return_items_objects
@@ -225,7 +222,7 @@ class PrimEnv2Ref(gym.Env):
         return items
 
     def _add_random_item(self):
-        embedding = self.item_rng.randn(self.embedding_dimension)*self.cluster_var
+        embedding = self.item_rng.randn(self.embedding_dimension) * self.cluster_var
         item = Item(id=self.item_counter, embedding=embedding, use_until=np.inf)
         self.item_counter += 1
         self.items[item.id] = item
@@ -243,7 +240,7 @@ class PrimEnv2Ref(gym.Env):
 
             from scipy.stats import multivariate_normal
             if not hasattr(self, 'dist'):
-                #self.dist = multivariate_normal(mean=np.zeros(len(item)),
+                # self.dist = multivariate_normal(mean=np.zeros(len(item)),
                 #                                cov=self.item_preference_var * np.eye(len(item)))
                 self.dist = multivariate_normal(mean=0,
                                                 cov=self.item_preference_var)
@@ -272,7 +269,6 @@ class PrimEnv2Ref(gym.Env):
                 p=[1 - p, p]
             )
 
-
             if r > 0:
                 self.bought_items[self.active_user].add(self.items[a].id)
                 self.user_representations[self.active_user].append(a)
@@ -281,17 +277,17 @@ class PrimEnv2Ref(gym.Env):
             ps.append(p)
 
         # TODO: get all items p_click and save ranks of action items
-        all_ps = { self.items[i].id: self._order_proba(self.items[i].embedding)
-                   for i in self.item_pos2id.values() }
+        all_ps = {self.items[i].id: self._order_proba(self.items[i].embedding)
+                  for i in self.item_pos2id.values()}
 
-        sorted_ps = sorted(all_ps.items(), key=lambda kv : kv[1])
+        sorted_ps = sorted(all_ps.items(), key=lambda kv: kv[1])
 
         best_probas = [x[1] for x in sorted_ps[::-1][:len(action)]]
         ranks = []
         for a in action:
             for r, i in enumerate(sorted_ps[::-1]):
                 if i[0] == a:
-                    ranks.append(r+1)
+                    ranks.append(r + 1)
                     break
 
         self.recommendations[self.active_user].append(action)
@@ -374,6 +370,5 @@ class PrimEnv2Ref(gym.Env):
         #     user_representation.extend(self.items[i].embedding)
 
 
-        #print(len(user_representation))
+        # print(len(user_representation))
         return (np.array(user_representation), self._get_possible_items())
-
