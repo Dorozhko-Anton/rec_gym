@@ -100,6 +100,7 @@ class MovieLens(gym.Env):
             pos += 1
 
         self.action_space = NDiscreteTuple(Discrete(len(possible_items)), self.n_rec)
+        self.observation_space = None
         return self.Users[self.active_uid], possible_items
 
     def _reward(self, action):

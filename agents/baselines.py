@@ -129,13 +129,129 @@ class LinUCB(Agent):
             if key in dictionary:
                 self.__dict__[key] = dictionary[key]
 
+# ==============================
+
+# =================================
+
+from agents.baselines import Agent
+
+class DotProdAgent(Agent):
+    def __init__(self, n_rec):
+        self.n_rec = n_rec
+
+    def begin_episode(self, observation):
+        user, items = observation
+        scores = [user.dot(i) for i in items]
+        idxs = np.argsort(scores)[::-1][:self.n_rec]
+        return idxs
+
+    def step(self, reward, observation):
+        user, items = observation
+        scores = [user.dot(i) for i in items]
+        idxs = np.argsort(scores)[::-1][:self.n_rec]
+        return idxs
+
+    def end_episode(self, reward):
+        raise NotImplemented
+
+
+# =================================
+
+
+from agents.baselines import Agent
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.layers import dot, Concatenate, Dense, Input
+from tensorflow.keras.models import Model
+from tensorflow.keras.losses import MSE
+
+
+class MFAgent(Agent):
+    def __init__(self, n_rec, state_dim, action_dim, sess):
+        self.n_rec = n_rec
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.sess = sess
+
+        self.user_ph = Input(shape=(self.state_dim,), name='user')
+        self.item_ph = Input(shape=(self.action_dim,), name='item')
+        self.true_ph = Input(shape=(1,), name='true')
+
+        net = Dense(20)(Concatenate()([self.user_ph, self.item_ph]))
+        net = Dense(1)(net)
+        self.rank_op = net
+
+        self.loss = MSE(self.rank_op, self.true_ph)
+
+        self.model = Model(inputs=[self.user_ph,
+                                   self.item_ph],
+                           outputs=self.rank_op)
+
+        self.model.compile(loss=MSE, optimizer="adam")
+
+        self.lr = 1e-4
+        self.batch = 32
+        self.n_iter = 10
+
+        self.memory = []
+
+        self.last_action = None
+        self.last_user = None
+
+    def _train(self):
+
+        if len(self.memory) >= self.batch:
+            for i in range(self.n_iter):
+                batch_idxs = np.random.choice(range(len(self.memory)), size=self.batch)
+                users, items, true_scores = zip(*[self.memory[i] for i in batch_idxs])
+
+                self.model.fit([users, items, true_scores])
+
+    def _get_actions(self, observation):
+        user, items = observation
+
+        scores = []
+        for i in items:
+            score = self.sess.run(self.rank_op, feed_dict={
+                self.user_ph: user[None],
+                self.item_ph: i[None],
+            })
+            scores.append(score[0][0])
+
+        idxs = np.argsort(scores)[::-1][:self.n_rec]
+
+        self.last_action = [items[i] for i in idxs]
+        self.last_user = user
+        return idxs
+
+    def begin_episode(self, observation):
+        self.sess.run(tf.global_variables_initializer())
+        idxs = self._get_actions(observation)
+        return idxs
+
+    def step(self, reward, observation):
+        for i, item in enumerate(self.last_action):
+            self.memory.append([self.last_user, item, reward / self.n_rec])
+        self.last_action = None
+        self.last_user = None
+
+        idxs = self._get_actions(observation)
+        return idxs
+
+    def end_episode(self, reward):
+        raise NotImplemented
+
+
+# =================================
+
+#================================
 
 # @gin.configurable
 # class HLinUCB(Agent):
 #     pass
 
-from keras.layers import Input, Embedding, Flatten, Dot
-from keras.models import Model
+from tensorflow.keras.layers import Input, Embedding, Flatten, Dot
+from tensorflow.keras.models import Model
 
 @gin.configurable
 class DeepMF(Agent):
