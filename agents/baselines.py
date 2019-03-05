@@ -28,22 +28,34 @@ class RandomAgent(Agent):
         return np.random.choice(list(range(n_items)), self.action_size)
 
 
-@gin.configurable
-class PopularityAgent(Agent):
-    def begin_episode(self, observation):
-        return super().begin_episode(observation)
-
-    def step(self, reward, observation):
-        return super().step(reward, observation)
-
-    def end_episode(self, reward):
-        return super().end_episode(reward)
-
-    def bundle_and_checkpoint(self, directory, iteration):
-        return super().bundle_and_checkpoint(directory, iteration)
-
-    def unbundle(self, directory, iteration, dictionary):
-        return super().unbundle(directory, iteration, dictionary)
+# @gin.configurable
+# class PopularityAgent(Agent):
+#     def __init__(self, n_rec):
+#         self.item_counts = {}
+#         self.last_action = {}
+#         self.n_rec = n_rec
+#
+#     def begin_episode(self, observation):
+#         user, items = observation
+#
+#         self.last_action = np.random.choice(len(items), size=self.n_rec)
+#
+#         return super().begin_episode(observation)
+#
+#     def step(self, reward, observation):
+#
+#
+#
+#         return super().step(reward, observation)
+#
+#     def end_episode(self, reward):
+#         return super().end_episode(reward)
+#
+#     def bundle_and_checkpoint(self, directory, iteration):
+#         return super().bundle_and_checkpoint(directory, iteration)
+#
+#     def unbundle(self, directory, iteration, dictionary):
+#         return super().unbundle(directory, iteration, dictionary)
 
 
 # @gin.configurable

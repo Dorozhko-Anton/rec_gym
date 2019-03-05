@@ -75,8 +75,8 @@ class Qagent(Agent):
             net = Sequential(
                 layers=[
                     InputLayer(input_shape=(self._state_dim[0] + self._action_dim[0],)),
-                    Dense(200, activation='relu'),
-                    Dense(100, activation='relu'),
+                    Dense(50, activation='relu'),
+                    Dense(20, activation='relu'),
                     Dense(1)
                 ]
             )
@@ -159,18 +159,6 @@ class Qagent(Agent):
             self.target_action: actions,
         })
 
-    def sample_action(self, state, actions):
-
-        qvalues = self.rank_action(state, actions).reshape(-1)
-
-        if np.random.rand() > self.epsilon:
-            idxs = qvalues.argsort()[::-1][:self._action_size]
-        else:
-            idxs = np.random.choice(range(actions.shape[0]), size=self._action_size,
-                                    p=softmax(qvalues))
-
-        return actions[idxs]
-
     def _train(self, batch):
         s, a, r, next_s, actions, done = batch
 
@@ -199,13 +187,12 @@ class Qagent(Agent):
     def _sample_action(self, state, actions):
         actions = np.array(actions)
 
-        qvalues = self.rank_action(state, actions).reshape(-1)
-
         if np.random.rand() > self.epsilon:
+            qvalues = self.rank_action(state, actions).reshape(-1)
             idxs = qvalues.argsort()[::-1][:self._action_size]
         else:
-            idxs = np.random.choice(range(actions.shape[0]), size=self._action_size,
-                                    p=softmax(qvalues))
+            idxs = np.random.choice(actions.shape[0], size=self._action_size)
+
         return idxs, actions[idxs]
 
     def _train_step(self):
