@@ -1,8 +1,8 @@
-import keras
 import tensorflow as tf
 import numpy as np
-from keras.models import Sequential, Model
-from keras.layers import Dense, InputLayer, Activation, activations, Input, concatenate
+
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Dense, InputLayer, Activation, Input, concatenate
 
 from agents.utils import Agent
 from agents.utils import ReplayBuffer

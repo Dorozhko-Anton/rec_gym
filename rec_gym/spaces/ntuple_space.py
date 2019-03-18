@@ -1,5 +1,5 @@
 import gym
-from gym.core import Space
+from gym.spaces import Space
 import numpy as np
 
 class NDiscreteTuple(Space):
@@ -12,7 +12,7 @@ class NDiscreteTuple(Space):
         self.space = space
         self.n = n
         self.np_random = np.random.RandomState()
-        super(NDiscreteTuple, self).__init__(None, None)
+        super(NDiscreteTuple, self).__init__()
 
     def seed(self, seed):
         self.np_random.seed(seed)

@@ -1,9 +1,8 @@
 import tensorflow as tf
 import gin
 
-import keras
-from keras.models import Sequential, Model
-from keras.layers import Dense, concatenate
+
+from tensorflow.keras.layers import Dense, concatenate
 
 import numpy as np
 import os

@@ -5,6 +5,7 @@ import gym
 from gym.spaces import Box
 import numpy as np
 
+
 class BaselinesWrapper(DynamicSpacesWrapper):
     def __init__(self, env, maxlen=5):
         super().__init__(env)
@@ -15,7 +16,7 @@ class BaselinesWrapper(DynamicSpacesWrapper):
         def new_user():
             user = deque(maxlen=self.N)
             for i in range(self.N):
-                user.append([0]*self.d)
+                user.append([0] * self.d)
             return user
 
         self.user_repr = defaultdict(lambda: new_user())
@@ -49,14 +50,14 @@ class BaselinesWrapper(DynamicSpacesWrapper):
 
         self.last_user, self.last_items = observation
 
-        self.observation_space = Box(low=-20, high=20, shape=(self.d*self.N,), dtype=np.float)
+        self.observation_space = Box(low=-20, high=20, shape=(self.d * self.N,), dtype=np.float)
         self.action_space = Box(low=-1, high=1, shape=(self.d,), dtype=np.float)
         return BaselinesWrapper.flatten_deq(self.user_repr[self.last_user.id]), reward, done, info
 
     @staticmethod
     def flatten_deq(deq):
         return np.array([[i for item in deq
-                           for i in item]])
+                          for i in item]])
 
 
 class EmbBaselinesWrapper(DynamicSpacesWrapper):
@@ -79,7 +80,6 @@ class EmbBaselinesWrapper(DynamicSpacesWrapper):
         return self.last_user.embedding
 
     def step(self, action):
-
         scores = [np.dot(action, i.embedding) for i in self.last_items]
         action = np.argsort(scores)[::-1][:self.K]
 
