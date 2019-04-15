@@ -1,7 +1,4 @@
 import tensorflow as tf
-import gin
-
-
 from tensorflow.keras.layers import Dense, concatenate
 
 import numpy as np
@@ -10,7 +7,6 @@ import os
 from agents.utils import ReplayBuffer, Agent, PER
 
 
-#@gin.configurable
 class ActorNetwork:
     def __init__(self,
                  action_size: int,
@@ -147,7 +143,7 @@ class ActorNetwork:
         return sync_qt_ops
 
 
-#@gin.configurable
+
 class CriticNetwork:
     def __init__(self,
                  action_size: int,
@@ -255,7 +251,6 @@ class CriticNetwork:
 
 
 
-@gin.configurable
 class DDPGAgent(Agent):
     def __init__(self,
                  action_size: int,

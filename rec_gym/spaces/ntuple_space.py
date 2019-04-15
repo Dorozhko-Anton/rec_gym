@@ -1,8 +1,8 @@
 import gym
-from gym.spaces import Space
 import numpy as np
 
-class NDiscreteTuple(Space):
+
+class NDiscreteTuple(gym.Space):
     """
     A tuple (i.e., product) of simpler spaces
     Example usage:

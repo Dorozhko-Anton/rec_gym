@@ -156,3 +156,45 @@ register(
         'choose_only_one_item': False
     }
 )
+
+
+register(
+    id='JDSimulatedEnv-v1',
+    entry_point='rec_gym.envs:JDSimulatedEnv',
+    kwargs={
+        'n_users':20,
+        'n_items':100,
+        'embedding_size':2,
+        'recommendation_size':4,
+        'kappa': 0.5,
+        'diversity_engagement_type':'linear',
+        'a':1,
+        'b':0,
+        'V':1,
+        'd':1,
+        'mu':0,
+        'sigma':1,
+        'seed':None,
+    }
+)
+
+
+register(
+    id='JDSimulatedEnv-v2',
+    entry_point='rec_gym.envs:JDSimulatedEnv',
+    kwargs={
+        'n_users':20,
+        'n_items':100,
+        'embedding_size':2,
+        'recommendation_size':4,
+        'kappa': 0.5,
+        'diversity_engagement_type':'quadratic',
+        'a':1,
+        'b':0,
+        'V':1,
+        'd':1,
+        'mu':0,
+        'sigma':1,
+        'seed':None,
+    }
+)

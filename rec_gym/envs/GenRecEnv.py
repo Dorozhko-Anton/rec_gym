@@ -1,4 +1,4 @@
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 import gym
 import numpy as np
 from gym.utils import seeding

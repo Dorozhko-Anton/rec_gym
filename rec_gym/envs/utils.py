@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class User:
     def __init__(self,
                  id: int,

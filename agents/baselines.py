@@ -1,10 +1,8 @@
 from agents.utils import Agent
-import gin
 import numpy as np
 
-@gin.configurable
 class RandomAgent(Agent):
-    def __init__(self, action_size:int):
+    def __init__(self, action_size: int):
         self.action_size = action_size
 
     def begin_episode(self, observation):
@@ -63,7 +61,6 @@ class RandomAgent(Agent):
 #     pass
 
 
-@gin.configurable
 class LinUCB(Agent):
     def __init__(self,
                  d: int,
@@ -141,11 +138,13 @@ class LinUCB(Agent):
             if key in dictionary:
                 self.__dict__[key] = dictionary[key]
 
+
 # ==============================
 
 # =================================
 
 from agents.baselines import Agent
+
 
 class DotProdAgent(Agent):
     def __init__(self, n_rec):
@@ -171,10 +170,8 @@ class DotProdAgent(Agent):
 
 
 from agents.baselines import Agent
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import dot, Concatenate, Dense, Input
-from tensorflow.keras.models import Model
 from tensorflow.keras.losses import MSE
 
 
@@ -256,7 +253,7 @@ class MFAgent(Agent):
 
 # =================================
 
-#================================
+# ================================
 
 # @gin.configurable
 # class HLinUCB(Agent):
@@ -265,7 +262,7 @@ class MFAgent(Agent):
 from tensorflow.keras.layers import Input, Embedding, Flatten, Dot
 from tensorflow.keras.models import Model
 
-@gin.configurable
+
 class DeepMF(Agent):
     def __init__(self, user_embedding_size, item_embedding_size, batch_size=32, train_steps=20):
         self.user_embedding_size = user_embedding_size
@@ -304,9 +301,9 @@ class DeepMF(Agent):
     def _train(self):
         if len(self.memory) > self.batch_size:
             self.model.fit(x=self.Xs, y=self.ys,
-                            batch_size=self.batch_size,
-                               epochs=self.train_steps,
-                               validation_split=0.1, shuffle=True)
+                           batch_size=self.batch_size,
+                           epochs=self.train_steps,
+                           validation_split=0.1, shuffle=True)
 
     def _save_reward(self, reward):
         self.ys.append(reward)
@@ -321,7 +318,6 @@ class DeepMF(Agent):
 
     def end_episode(self, reward):
         self._save_reward(reward)
-
 
     # def bundle_and_checkpoint(self, directory, iteration):
     #     return super().bundle_and_checkpoint(directory, iteration)
