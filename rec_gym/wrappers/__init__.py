@@ -2,3 +2,5 @@ from .dynamic_spaces_base_wrapper import DynamicSpacesWrapper
 from .stats_wrapper import StatsWrapper
 from .flatten_observation_wrapper import FlattenObservationsWrapper
 from .baselines_wrapper import BaselinesWrapper, EmbBaselinesWrapper
+from .explicit_user_item_wrapper import ExplicitUserItemWrapper
+from .baselines_wrapper import DRR_EmbBaselinesWrapper, DRR_BaselinesWrapper

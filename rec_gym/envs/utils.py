@@ -8,6 +8,9 @@ class User:
         self.id = id
         self.embedding = embedding
 
+    def __repr__(self):
+        return "User (%s, %s)" % (str(self.id), str(self.embedding))
+
 
 class Item:
     def __init__(self,
@@ -17,3 +20,6 @@ class Item:
         self.id = id
         self.embedding = embedding
         self.use_until = use_until
+
+    def __repr__(self):
+        return "Item (%s, %s)" % (str(self.id), str(self.embedding))

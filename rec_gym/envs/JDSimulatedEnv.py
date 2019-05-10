@@ -15,7 +15,7 @@ from gym.utils import seeding
 from scipy.stats import entropy
 
 from rec_gym.spaces.ntuple_space import NDiscreteTuple
-from .utils import User, Item
+from rec_gym.envs.utils import User, Item
 
 from copy import deepcopy
 
@@ -170,10 +170,11 @@ class JDSimulatedEnv(gym.Env):
         observation = self._get_observation()
         reward = np.sum(clicks)
         info = {
+            'recs': action,
             'p_stay': p_stay,
             't_return': t_return,
             'p_clicks': p_clicks,
-            'rewards' : clicks,
+            'rewards': clicks,
         }
         return observation, reward, done, info
 

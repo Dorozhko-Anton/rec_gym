@@ -1,7 +1,7 @@
 from collections import namedtuple
 from rec_gym.wrappers.dynamic_spaces_base_wrapper import DynamicSpacesWrapper
 
-Interaction = namedtuple('Interaction', ['t', 'uid', 'recs', 'rewards', 'probs', 'best_ps', 'ranks'])
+Interaction = namedtuple('Interaction', ['t', 'uid', 'recs', 'rewards', 'probs', 'best_ps', 'ranks', 'raw_info'])
 
 
 class StatsWrapper(DynamicSpacesWrapper):
@@ -13,7 +13,7 @@ class StatsWrapper(DynamicSpacesWrapper):
 
     def step(self, action):
         observation, reward, done, info = super().step(action)
-        user, items = observation
+
         self.t += 1
         x = Interaction(t=self.t,
                         uid=self.last_uid,
@@ -21,10 +21,14 @@ class StatsWrapper(DynamicSpacesWrapper):
                         rewards=info.get('rewards', None),
                         probs=info.get('probs', None),
                         best_ps=info.get('best_ps', None),
-                        ranks=info.get('ranks', None)
+                        ranks=info.get('ranks', None),
+                        raw_info=info,
                         )
         self.interactions.append(x)
-        self.last_uid = user.id
+
+        if observation is not None:
+            user, items = observation
+            self.last_uid = user.id
         return observation, reward, done, info
 
     def reset(self, **kwargs):

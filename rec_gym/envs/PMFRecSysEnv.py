@@ -9,7 +9,7 @@ from surprise import Dataset, SVD
 from surprise.model_selection import train_test_split
 
 from rec_gym.spaces.ntuple_space import NDiscreteTuple
-from .utils import User, Item
+from rec_gym.envs.utils import User, Item
 
 
 class MovieLens(gym.Env):

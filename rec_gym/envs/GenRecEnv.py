@@ -9,7 +9,7 @@ from sklearn.decomposition import PCA
 
 from gym.spaces import Discrete
 from rec_gym.spaces.ntuple_space import NDiscreteTuple
-from .utils import User, Item
+from rec_gym.envs.utils import User, Item
 
 
 class GeneratedRecEnv(gym.Env):
