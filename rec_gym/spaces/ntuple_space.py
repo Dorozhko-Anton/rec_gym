@@ -18,7 +18,7 @@ class NDiscreteTuple(gym.Space):
         self.np_random.seed(seed)
 
     def sample(self):
-        return tuple(self.np_random.choice(range(self.space.n), self.n))
+        return tuple(self.np_random.choice(range(self.space.n), self.n, replace=False))
 
     def contains(self, x):
         if isinstance(x, list):

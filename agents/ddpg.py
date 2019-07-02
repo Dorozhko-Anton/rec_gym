@@ -246,7 +246,7 @@ class CriticNetwork:
         self.td_loss = tf.reduce_mean(self.td_errors)
         # Optimization Op
         self.train_op = self.optimizer.minimize(self.td_loss)
-        self.action_gradients = tf.gradients(self._critic,
+        self.action_gradients = tf.gradients(-tf.reduce_mean(self._critic),
                                              self._action_ph, name='action_gradients')[0]
 
 
@@ -310,7 +310,7 @@ class DDPGAgent(Agent):
         self._last_action = action
         return actions_ids
 
-    def step(self, reward, observation):
+    def step(self, reward, observation, info=None):
         state, items = observation
 
         if self.per:
@@ -332,7 +332,7 @@ class DDPGAgent(Agent):
 
         return actions_ids
 
-    def end_episode(self, reward):
+    def end_episode(self, reward, info=None):
         return super().end_episode(reward)
 
     def bundle_and_checkpoint(self, checkpoint_dir, iteration_number):

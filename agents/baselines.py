@@ -8,10 +8,10 @@ class RandomAgent(Agent):
     def begin_episode(self, observation):
         return self._select_action(observation)
 
-    def step(self, reward, observation):
+    def step(self, reward, observation, info=None):
         return self._select_action(observation)
 
-    def end_episode(self, reward):
+    def end_episode(self, reward, info=None):
         pass
 
     def bundle_and_checkpoint(self, directory, iteration):
@@ -114,13 +114,13 @@ class LinUCB(Agent):
     def begin_episode(self, observation):
         return self._choose_action(observation)
 
-    def step(self, reward, observation):
+    def step(self, reward, observation, info=None):
         # update matrix of previous action with reward
         self._update_matrices(reward)
         # select action from observation
         return self._choose_action(observation)
 
-    def end_episode(self, reward):
+    def end_episode(self, reward, info=None):
         # update matrix of previous action with reward
         self._update_matrices(reward)
 
@@ -156,13 +156,13 @@ class DotProdAgent(Agent):
         idxs = np.argsort(scores)[::-1][:self.n_rec]
         return idxs
 
-    def step(self, reward, observation):
+    def step(self, reward, observation, info=None):
         user, items = observation
         scores = [user.dot(i) for i in items]
         idxs = np.argsort(scores)[::-1][:self.n_rec]
         return idxs
 
-    def end_episode(self, reward):
+    def end_episode(self, reward, info=None):
         raise NotImplemented
 
 
@@ -238,7 +238,7 @@ class MFAgent(Agent):
         idxs = self._get_actions(observation)
         return idxs
 
-    def step(self, reward, observation):
+    def step(self, reward, observation, info=None):
         for i, item in enumerate(self.last_action):
             self.memory.append([self.last_user, item, reward / self.n_rec])
         self.last_action = None
@@ -247,7 +247,7 @@ class MFAgent(Agent):
         idxs = self._get_actions(observation)
         return idxs
 
-    def end_episode(self, reward):
+    def end_episode(self, reward, info=None):
         raise NotImplemented
 
 

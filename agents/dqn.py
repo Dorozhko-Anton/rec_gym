@@ -211,7 +211,7 @@ class Qagent(Agent):
         self._last_action = action
         return actions_ids
 
-    def step(self, reward, observation):
+    def step(self, reward, observation, info=None):
         state, items = observation
         self._replay.add(self._last_state, self._last_action, reward, state, np.array(items), False)
 
@@ -224,7 +224,7 @@ class Qagent(Agent):
         self._last_action = action
         return actions_ids
 
-    def end_episode(self, reward):
+    def end_episode(self, reward, info=None):
         return super().end_episode(reward)
 
     def bundle_and_checkpoint(self, directory, iteration):

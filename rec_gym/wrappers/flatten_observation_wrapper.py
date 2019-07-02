@@ -12,6 +12,9 @@ class FlattenObservationsWrapper(DynamicSpacesWrapper):
 
     def step(self, action):
         observation, reward, done, info = super().step(action)
+        if done:
+            return None, reward, done, info
+
         return FlattenObservationsWrapper._flatten_observation(observation), reward, done, info
 
     @staticmethod
